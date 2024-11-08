@@ -1,0 +1,204 @@
+<!DOCTYPE html>
+<html lang="fi">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Jäsenrekisteri Ylläpito</title>
+</head>
+<body>
+
+    <h1>Jäsenrekisterin Ylläpito</h1>
+
+    <!-- Formi jäsenen luontiin -->
+    <h2>Lisää uusi jäsen</h2>
+    <form id="createMemberForm">
+        <label for="etunimi">Etunimi:</label>
+        <input type="text" id="etunimi" name="Etunimi" required><br><br>
+
+        <label for="sukunimi">Sukunimi:</label>
+        <input type="text" id="sukunimi" name="Sukunimi" required><br><br>
+
+        <label for="osoite">Osoite:</label>
+        <input type="text" id="osoite" name="Osoite" required><br><br>
+
+        <label for="postinumero">Postinumero:</label>
+        <input type="text" id="postinumero" name="Postinumero" required><br><br>
+
+        <label for="puhelin">Puhelin:</label>
+        <input type="text" id="puhelin" name="Puhelin" required><br><br>
+
+        <label for="sahkoposti">Sähköposti:</label>
+        <input type="email" id="sahkoposti" name="Sähköposti" required><br><br>
+
+        <label for="jasenyys">Jäsenyyden Alku Pvm:</label>
+        <input type="date" id="jasenyys" name="JäsenyydenAlkuPvm" required><br><br>
+
+        <button type="submit">Lisää Jäsen</button>
+        <button type="submit" id="editButton" style="display: none;">Tallenna muutokset</button>
+        <button type="button" id="cancelButton" style="display: none;">Peruuta</button>
+    </form>
+
+    <!-- Lista jäsenille -->
+    <h2>Jäsenet</h2>
+    <ul id="membersList"></ul>
+
+    <!-- JavaScript CRUD toiminnoille -->
+    <script>
+        let editingMemberId = null; // Tämä muuttuja pitää kirjaa onko muokattavassa tilassa
+        document.getElementById('createMemberForm').addEventListener('submit', function(event) {
+            event.preventDefault(); // Estä lomakkeen lähettäminen
+
+            // Hakee lomaketiedot
+            const formData = {
+                Etunimi: document.getElementById('etunimi').value,
+                Sukunimi: document.getElementById('sukunimi').value,
+                Osoite: document.getElementById('osoite').value,
+                Postinumero: document.getElementById('postinumero').value,
+                Puhelin: document.getElementById('puhelin').value,
+                Sähköposti: document.getElementById('sahkoposti').value,
+                JäsenyydenAlkuPvm: document.getElementById('jasenyys').value
+            };
+
+            if (editingMemberId) {
+                // jos ollaan muokkaamassa jäsentä, lähetä PUT-pyyntö
+                updateMember(editingMemberId, formData);
+            } else {
+                // jos ei olla muokkaamassa jäsentä, lähetä POST-pyyntö
+                createMember(formData);
+            }
+        });
+
+            // Lähetä POST-pyyntö jäsenen luomiseksi
+        function createMember(formData) {
+            fetch('/add_member', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json'
+                },
+                body: JSON.stringify(formData)
+            })
+            .then(response => response.json())
+            .then(data => {
+                alert('Jäsen lisätty!');
+                loadMembers(); // Päivitä lista
+                clearForm(); // Tyhjennä lomake
+            })
+            .catch(error => console.error('Error:', error));
+        }
+
+        // Hae jäsenet ja näytä ne listassa
+        function loadMembers() {
+            fetch('/get_members')
+                .then(response => response.json())
+                .then(data => {
+                    const membersList = document.getElementById('membersList');
+                    membersList.innerHTML = ''; // Tyhjennä lista
+                    data.forEach(member => {
+                        const listItem = document.createElement('li');
+                        listItem.textContent = `${member.Etunimi} ${member.Sukunimi} - ${member.Sähköposti}`;
+                        // Lisää Poista-nappi
+                        const deleteButton = document.createElement('button');
+                        deleteButton.textContent = 'Poista';
+                        deleteButton.addEventListener('click', function() {
+                            deleteMember(member._id);
+                        });
+                        // Lisää muokkaa-nappi
+                        const editButton = document.createElement('button');
+                        editButton.textContent = 'Muokkaa';
+                        editButton.addEventListener('click', function() {
+                            editMember(member._id);
+                        });
+                        listItem.appendChild(deleteButton);
+                        listItem.appendChild(editButton);
+                        membersList.appendChild(listItem);
+                    });
+                })
+                .catch(error => console.error('Error:', error));
+        }
+
+        // Poista jäsen
+        function deleteMember(id) {
+            fetch(`/delete_member/${id}`, { method: 'DELETE' })
+                .then(response => response.json())
+                .then(data => {
+                    alert('Jäsen poistettu!');
+                    loadMembers(); // Päivitä lista
+                })
+                .catch(error => console.error('Error:', error));
+        }
+
+        // Jäsenen päivitys funktio PUT-pyynnöllä
+        function updateMember(id, formData) {
+            fetch(`/update_member/${id}`, {
+                method: 'PUT',
+                headers: {
+                    'Content-Type': 'application/json'
+                },
+                body: JSON.stringify(formData)
+            })
+            .then(response => response.json())
+            .then(data => {
+                alert('Jäsen päivitetty!');
+                loadMembers();  // Päivitä lista
+                clearForm();    // Tyhjennä lomake
+                editingMemberId = null;  // Palauta tila, ei enää muokkaustilassa
+                hideEditButtons(); // Piilota muokkausnapit
+            })
+            .catch(error => console.error('Error:', error));
+        }
+
+        // Jäsenen muokkaus (GET-pyyntö, jotta tiedot saadaan lomakkeelle)
+        function editMember(id) {
+            fetch(`/get_member/${id}`)
+                .then(response => response.json())
+                .then(data => {
+                    document.getElementById('etunimi').value = data.Etunimi;
+                    document.getElementById('sukunimi').value = data.Sukunimi;
+                    document.getElementById('osoite').value = data.Osoite;
+                    document.getElementById('postinumero').value = data.Postinumero;
+                    document.getElementById('puhelin').value = data.Puhelin;
+                    document.getElementById('sahkoposti').value = data.Sähköposti;
+                    document.getElementById('jasenyys').value = data.JäsenyydenAlkuPvm;
+
+                    editingMemberId = id;  // Asetetaan muokkaustilaan
+                    showEditButtons();      // Näytä muokkausnapit
+                })
+                .catch(error => console.error('Error:', error));
+        }
+
+        // Tyhjennä lomake
+        function clearForm() {
+            document.getElementById('etunimi').value = '';
+            document.getElementById('sukunimi').value = '';
+            document.getElementById('osoite').value = '';
+            document.getElementById('postinumero').value = '';
+            document.getElementById('puhelin').value = '';
+            document.getElementById('sahkoposti').value = '';
+            document.getElementById('jasenyys').value = '';
+            editingMemberId = null;  // Palauta tila normaaliksi
+            hideEditButtons();        // Piilota muokkausnapit
+        }
+
+        // Näytä muokkaus- ja peruutusnapit
+        function showEditButtons() {
+            document.getElementById('editButton').style.display = 'inline';  // Näytä "Tallenna muutokset" -nappi
+            document.getElementById('cancelButton').style.display = 'inline';  // Näytä "Peruuta" -nappi
+        }
+
+        // Piilota muokkaus- ja peruutusnapit
+        function hideEditButtons() {
+            document.getElementById('editButton').style.display = 'none';  // Piilota "Tallenna muutokset" -nappi
+            document.getElementById('cancelButton').style.display = 'none';  // Piilota "Peruuta" -nappi
+        }
+
+        // "Peruuta" napin toiminto
+        document.getElementById('cancelButton').addEventListener('click', function(event) {
+            clearForm();  // Tyhjennä lomake ja palauta tila
+        });
+
+        // Lataa jäsenet sivun latautuessa
+        window.onload = loadMembers;
+    </script>
+
+</body>
+</html>
